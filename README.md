@@ -26,3 +26,69 @@ GitAgent solves these vulnerabilities by creating a structured **StateGraph Agen
 ## ⚙️ Architecture & Project Flow
 
 The following graph maps out the precise, automated loop execution enforced by the LangGraph engine:
++-----------------------+
+|   Input: GitHub URL   |
++-----------+-----------+
+            |
+            v
+ +---------------------+
+ |  [1] Scrape GitHub  |  <--- Over the API (In-Memory Only)
+ +-----------+---------+
+             |
+             v
+ +---------------------+
+ | [2] Analyze README  |  ---> Computes Ideation & Novelty Scores
+ +-----------+---------+
+             |
+             v
+ +---------------------+
+ |  [3] Process Chunks |  ---> Iterates script-by-script via Python logic
+ +-----------+---------+
+             |
+             v
+ +---------------------+
+ |    Router Status    |
+ +-----+-----------+---+
+            | 
+            v
++---------------------+
+|  [4] Finalize Audit | ---> Grades Execution & Structural Mechanics
++----------+----------+
+           |
+           v
++---------------------+
+| Streamlit UI Output | ---> Dual Scoring & System Suggestions
++---------------------+
+
+### Detailed Node Execution Sequence
+
+#### 1. Data Ingestion Node (`scrape`)
+* Captures the input hyperlink and extracts the `owner/repository` string safely.
+* Triggers a LangChain custom `@tool` backed by `GithubFileLoader`. 
+* Streams down all `.md` and `.py` source documents as separate byte packages straight into the application `AgentState`.
+
+#### 2. Ideation Engine Node (`analyze_md`)
+* Feeds the pure documentation payload to `ChatGroq`.
+* Isolates the project's Core Problem Statement and Proposed Solution.
+* Scores the project out of 10 based on **Originality**, **Novelty**, and **Viability**, saving this summary directly into the agent's foundation context layer.
+
+#### 3. Ephemeral Memory Loop Node (`process_py`)
+* Employs the `RecursiveCharacterTextSplitter.from_language(Language.PYTHON)`.
+* Breaks down individual python scripts sequentially into manageable 1,500-character logical chunks with 150-character contextual bridges.
+* For each chunk, it passes the code to the LLM alongside the *Readme Summary Memory*. The LLM evaluates the snippet's purpose and stores this analysis inside an accumulator stack (`chunk_summaries`).
+* A conditional router edge calculates `current_chunk_idx`. If additional unread `.py` arrays remain, it loops back to analyze the next block.
+
+#### 4. Architecture Synthesis Node (`finalize`)
+* Once the loop terminates, the compiled accumulator memory string represents the entire application's flow.
+* The agent reads the composite memory bank to score the code out of 10 based on **Execution Quality**, **Syntax Correctness**, **Relevance**, and **Structural Mechanics** (specifically noting implementation parameters like agents, chains, or external frameworks).
+* Spits out an automated, actionable "Suggestions for Improvement" ledger.
+
+---
+
+## 🛠️ Tech Stack & Core Libraries
+
+* **State Machine Logic:** `langgraph` (Enforces deterministic processing states, state variables, and conditional edge routing rules).
+* **LLM Orchestration:** `langchain-groq` (Utilizing highly accelerated `llama3-70b` models for massive throughput speed).
+* **Document Ingestion:** `langchain-community` (`GithubFileLoader` streaming protocols).
+* **Grammar Chunking Engine:** `langchain-text-splitters` (`RecursiveCharacterTextSplitter` matching `Language.PYTHON` specifications).
+* **Interface Layer:** `streamlit` (A hyper-clean, minimal web user interface).
