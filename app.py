@@ -7,16 +7,32 @@ from typing import Dict, List, Any
 from typing_extensions import TypedDict
 
 # LangChain & LangGraph imports
-from langchain_groq import ChatGroq
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_community.document_loaders import GithubFileLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter, Language
 from langgraph.graph import StateGraph, END
 
-# Initialize the LLM (Using Llama-3 for high context & speed)
-# Ensure os.environ["GROQ_API_KEY"] and os.environ["GITHUB_PERSONAL_ACCESS_TOKEN"] are set
-llm = ChatGroq(model="openai/gpt-oss-120b", temperature=0.1)
+# llm = None
 
+
+def build_llm(provider: str, api_key: str):
+    provider = provider.lower()
+    if provider == "openai":
+        from langchain_openai import ChatOpenAI
+        return ChatOpenAI(model="gpt-4o-mini", temperature=0.7, api_key=api_key)
+    if provider == "gemini":
+        from langchain_google_genai import ChatGoogleGenerativeAI
+        return ChatGoogleGenerativeAI(model="gemini-1.5-flash", temperature=0.7, google_api_key=api_key)
+    if provider == "anthropic":
+        from langchain_anthropic import ChatAnthropic
+        return ChatAnthropic(model="claude-3-5-sonnet-latest", temperature=0.7, api_key=api_key)
+    if provider == "mistral":
+        from langchain_mistralai import ChatMistralAI
+        return ChatMistralAI(model="mistral-large-latest", temperature=0.7, api_key=api_key)
+    if provider == "groq":
+        from langchain_groq import ChatGroq
+        return ChatGroq(model="openai/gpt-oss-120b", temperature=0.1, api_key=api_key)
+    raise ValueError("Unsupported provider selection")
 # =====================================================================
 # 1. DEFINE LANGGRAPH AGENT STATE
 # =====================================================================
@@ -99,7 +115,8 @@ def analyze_readme_node(state: AgentState) -> Dict[str, Any]:
         - Novelty
         - Viability of the problem and respective solution
 
-        Summarise this score to return the average overall score out of 10 for the idea
+        Summarise this score to return the average overall score out of 10 for the idea.
+        Show all the scores along with final overall idea score. 
         
         Format output strictly with clear markdown headers and an obvious 'FINAL SCORES' block.""")
     ])
@@ -188,7 +205,8 @@ def finalize_evaluation_node(state: AgentState) -> Dict[str, Any]:
         4. Application structural mechanics (Mandatory use of concept of tools, Multi query retriever, and memory integrated with Langchain or Langgraph to carry out the execution)
         
         Use scores from these to give average overall marks for execution out of 10.
-         
+        Show all the scores and the final average score.
+
         Generate a detailed list of actionable suggestions for architectural improvements or missing components.""")
     ])
     
@@ -246,8 +264,8 @@ workflow.add_edge("finalize", END)
 
 # Compile into executable AI runtime module
 agent_app = workflow.compile()
-from IPython.display import display, Image
-display(Image(agent_app.get_graph().draw_mermaid_png()))
+# from IPython.display import display, Image
+# display(Image(agent_app.get_graph().draw_mermaid_png()))
 
 # =====================================================================
 # 4. STREAMLIT INTERACTION FRONTEND INTERFACE
@@ -261,7 +279,8 @@ st.markdown("Analyze GitHub codebases structurally without local cloning footpri
 with st.sidebar:
     st.header("🔑 Configurations")
     github_token = st.text_input("GitHub Classic Token (No scopes required for public)", type="password")
-    groq_key = st.text_input("Groq API Token", type="password")
+    agent_provider = st.selectbox("Agent Provider", ["OpenAI", "Gemini", "Anthropic", "Mistral", "Groq"])
+    agent_key = st.text_input(f"{agent_provider} API Key", type="password")
 
 # User Input Target Repository URL
 repo_link = st.text_input("GitHub Hyperlink Target", placeholder="https://github.com/owner/repository")
@@ -269,12 +288,23 @@ repo_link = st.text_input("GitHub Hyperlink Target", placeholder="https://github
 if st.button("🚀 Execute Repository Audit", use_container_width=True):
     if not repo_link:
         st.error("Please provide a valid repository hyperlink target address.")
-    elif not github_token or not groq_key:
-        st.error("Please supply both API validation keys in the sidebar workspace.")
+    elif not github_token or not agent_key:
+        st.error("Please supply both the GitHub token and the selected agent API key.")
     else:
         # Dynamic context binding safely at frame invocation
         os.environ["GITHUB_PERSONAL_ACCESS_TOKEN"] = github_token
-        os.environ["GROQ_API_KEY"] = groq_key
+        os.environ["OPENAI_API_KEY"] = agent_key if agent_provider == "OpenAI" else os.environ.get("OPENAI_API_KEY", "")
+        os.environ["GOOGLE_API_KEY"] = agent_key if agent_provider == "Gemini" else os.environ.get("GOOGLE_API_KEY", "")
+        os.environ["ANTHROPIC_API_KEY"] = agent_key if agent_provider == "Anthropic" else os.environ.get("ANTHROPIC_API_KEY", "")
+        os.environ["MISTRAL_API_KEY"] = agent_key if agent_provider == "Mistral" else os.environ.get("MISTRAL_API_KEY", "")
+        os.environ["GROQ_API_KEY"] = agent_key if agent_provider == "Groq" else os.environ.get("GROQ_API_KEY", "")
+
+        try:
+            global llm
+            llm = build_llm(agent_provider, agent_key)
+        except Exception as e:
+            st.error(f"Unable to initialize {agent_provider} agent: {e}")
+            st.stop()
         
         # Initialize LangGraph AgentState inputs
         initial_inputs = {
@@ -307,6 +337,24 @@ if st.button("🚀 Execute Repository Audit", use_container_width=True):
                 with col2:
                     st.header("💻 2. Execution & Architecture Review")
                     st.markdown(final_output["final_py_score"])
+
+                report_markdown = f"""# GitAgent Repository Audit Report
+
+## Repository
+{repo_link}
+
+## 1. Concept & Ideation Review
+{final_output['md_score']}
+
+## 2. Execution & Architecture Review
+{final_output['final_py_score']}
+"""
+                st.download_button(
+                    "⬇️ Download Markdown Report",
+                    report_markdown,
+                    file_name="repo_audit_report.md",
+                    mime="text/markdown",
+                )
                     
             except Exception as e:
                 st.error(f"Runtime Operational failure during graph transition: {e}")
