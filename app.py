@@ -116,6 +116,7 @@ def analyze_readme_node(state: AgentState) -> Dict[str, Any]:
         - Viability of the problem and respective solution
 
         Summarise this score to return the average overall score out of 10 for the idea.
+        Deduct marks if the idea or the solution is too common or feels completely ai suggested.
         Show all the scores along with final overall idea score. 
         
         Format output strictly with clear markdown headers and an obvious 'FINAL SCORES' block.""")
@@ -205,6 +206,7 @@ def finalize_evaluation_node(state: AgentState) -> Dict[str, Any]:
         4. Application structural mechanics (Mandatory use of concept of tools, Multi query retriever, and memory integrated with Langchain or Langgraph to carry out the execution)
         
         Use scores from these to give average overall marks for execution out of 10.
+        Deduct marks if the code seems completely AI written without human intervention or idea.
         Show all the scores and the final average score.
 
         Generate a detailed list of actionable suggestions for architectural improvements or missing components.""")
