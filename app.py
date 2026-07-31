@@ -97,7 +97,9 @@ def analyze_readme_node(state: AgentState) -> Dict[str, Any]:
         Provide an explicit score out of 10 for:
         - Originality of idea
         - Novelty
-        - Viability of the problem
+        - Viability of the problem and respective solution
+
+        Summarise this score to return the average overall score out of 10 for the idea
         
         Format output strictly with clear markdown headers and an obvious 'FINAL SCORES' block.""")
     ])
@@ -144,7 +146,7 @@ def process_py_chunks_node(state: AgentState) -> Dict[str, Any]:
             ---
             {code}
             ---
-            Summarize what these declarations/operations achieve dynamically to preserve execution memory.""")
+            Summarize what these declarations/operations achieve and tools they utilise to achieve so dynamically to preserve execution memory.""")
         ])
         chain = prompt | llm
         res = chain.invoke({
@@ -182,9 +184,11 @@ def finalize_evaluation_node(state: AgentState) -> Dict[str, Any]:
         Grade the execution output from 1 to 10 on the following criteria:
         1. Execution Quality
         2. Code Correctness
-        3. Relevance to the stated problem
-        4. Application structural mechanics (Mandatory evaluation of tools, models, or agents deployed)
+        3. Relevance to the stated problem and solution
+        4. Application structural mechanics (Mandatory use of concept of tools, Multi query retriever, and memory integrated with Langchain or Langgraph to carry out the execution)
         
+        Use scores from these to give average overall marks for execution out of 10.
+         
         Generate a detailed list of actionable suggestions for architectural improvements or missing components.""")
     ])
     
